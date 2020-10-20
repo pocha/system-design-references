@@ -7,14 +7,14 @@
 
 ### Uber Engineering Reads
 
-https://eng.uber.com/tech-stack-part-one/ 
-https://eng.uber.com/tech-stack-part-two/ 
-https://eng.uber.com/mysql-migration/ 
-https://eng.uber.com/argos/ 
-https://eng.uber.com/engineering-an-efficient-route/ 
-https://eng.uber.com/trip-data-squeeze/ 
-https://eng.uber.com/schemaless-part-one/ 
-https://eng.uber.com/schemaless-part-two/ 
-https://eng.uber.com/cherami/ 
-https://eng.uber.com/chaperone/ 
+* https://eng.uber.com/tech-stack-part-one/
+* https://eng.uber.com/tech-stack-part-two/
+* https://eng.uber.com/mysql-migration/
+* https://eng.uber.com/argos/
+* https://eng.uber.com/engineering-an-efficient-route/
+* https://eng.uber.com/trip-data-squeeze/
+* https://eng.uber.com/schemaless-part-one/
+* https://eng.uber.com/schemaless-part-two/
+* https://eng.uber.com/cherami/
+* https://eng.uber.com/chaperone/   
 
