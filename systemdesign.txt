@@ -1,0 +1,400 @@
+
+
+- KARAN FEEDBACK
+	- 1. Do not start building the system
+	- 2. First ask and elborate on key functional requirements and non-functional requirements
+			- OLA
+				- Functional Requirements
+					- Booking a CAB
+					- Mobile Client
+					- Accept and Pay
+				- Non functiona requirements
+					- 1k requests per minute
+	- 3. Then elaborate on key design choices
+		- Microservices
+		- Geographical Sharding
+		- NoSQL
+	- 4. Take 10 mins to draw the diagram and answer all questions in your head
+		- Make sure that all diagrams are CLEAR and LABELLED completely.
+			- BIG BOXES AND CLEAR NAMES FOR EACH SERVICE
+			- Rewrite the diagrams if they are not clear so that they are clear completely and can be photographed
+
+
+	- System Design points
+		- 1. NoSQL vs RDBMS
+			- If retreival is primarily by primary key then NoSQL is good enough
+			- Otherwise can use Master Slave to scale out
+		- 2. Each Microservice should be backed by an internal persistence store - RDBMS or NoSQL
+			- For availability can keep a master slave relationship
+		- 3. Each Microservice can be drawn as multiple copies outlined to indicate that they are horizontally scalable 
+			- Eg. "CAB LOCATOR" in "ola-karan-drawing.jpg"
+		- 4. Can use queues to connect each microservice with other and make the system async.
+
+
+
+
+
+
+
+
+- How to talk about System Design
+	- Scope
+	- Key Componenets
+	- Data Model
+	- Scaling for Demand
+
+
+
+- IRCTC System Design
+	- Scope [https://youtu.be/8K2_BJpVSjQ?t=71]
+		- Inventory
+		- Book tickets 
+			- ditributed trnasaction in services
+			- concurrentcy, avoid duplicate booking
+		- Create user acccount
+		- Search
+		- View Train details
+		- Cancel Tickets
+	
+		- Flow: Create Account -> searchTrains -> view Details -> book Tickets -> notification
+			- https://youtu.be/8K2_BJpVSjQ?t=187
+				- accountService
+				- searchService
+				- detailsService
+				- bookingService
+					- internal services
+						- paymentService
+						- notifyService
+						- cancelService
+
+		- Data Model
+			- User DB
+				- Capacity Estimation
+			- Inventory DB
+			- Order DB
+		- Architecture
+			- Request -> LB -> Auto Scale group of each service -> DB's
+
+	- Transaction
+		- booking request -> goes to payment service -> payment service marks seat as pending for inventory service
+		- paymentservice processes the payment -> makes the seat as confirmed/waitlist
+		- if payment fails -> it rollback the seat to available
+
+
+
+
+
+URL Shortener Design
+	- Capacity planning
+	- https://www.youtube.com/watch?v=fMZMm_0ZhK4
+		- Sequential counters can be a security risk
+
+	- Encoding
+		- https://youtu.be/JQDHz72OA3c?t=425
+			- MD5 Hash
+			- Base 10
+			- Base 62 - 0-9A-Za-z [ideal]
+			- 7 character random output
+
+
+	- Storage
+		- Storing in DB
+
+			- Lookup can happen through a cache - redis or memcached
+				- If cache fails then can lookup through a database
+
+
+			- Two long urls might hash to same short url
+				- Problematic incase there are multiple servers
+					- Will need to check and add at a transaction level in the DB itself
+				- One solution is to create the short url as a counter
+					- But counter needs to handle requests from multiple servers so become bottleneck
+			- Can index each server
+				- Each server creates urls starting with their indexes
+			- Solution is to implement counter through ZooKeeper
+				- zookeeper reserves a counter range for each server
+				- the long url and short url can now be stored in NoSQL becuase we dont need to check for short url anymore
+			- Existing long url and short url can be checked in a cache for serving
+
+		- It is not required that a long url consistently match to the same short url
+			- Also useful from analytics perspective
+
+
+	
+
+
+
+
+- Twitter Design
+	https://www.youtube.com/watch?v=KmAyPUv9gOY&t=324s
+		- User
+		- TimeLine
+			- Home
+			- User
+		- Post/Tweet
+		- Followers
+
+	- Tweet -> LB -> Redis
+		- Redis stores in memory home timeline for all users
+		- LB - lookup followers - update list in Redis for each follower with this tweet
+		- Each list is replicated thrice in Redis
+		- Redis is inmemory.
+
+	- Each tweet is small so can afford taking a lot of space for duplication
+		- Allows fast lookup of home timeline
+	- Issue is that sometimes a tweek with million of followers will take time to update
+		- In that time someone else might reply to that tweet.
+		- So a use might not see the orignial tweet but a reply to that tweet.
+		- Solution could be that in run time when the tweets are rendered, the system does a lookup of tweets of all users which have followers above a threshold and are being followed by this user.
+
+	- Access Home Timeline
+		- Browser Get request -> LB -> Hash lookup for Redis box containting users list -> Load from redis box and render timeline.
+
+	- Search features
+		- independent of this whole architecture
+		- Each tweet goes to a search server and gets indexed and searched.
+
+	- https://www.youtube.com/watch?v=wYk0xPP_P_8
+		- Tweet, Timeline - User/Home, Trends, Search
+		- 300M+ users, 600 tweets per second, 600,000 reads/second
+		- Eventual Consistency - it is ok for tweets to be shown delayed
+		- Data
+			- DB - User, User Tweets, User Followers
+			- Tweet -> DB, Redis
+			- Redis 
+				- UID->Tweets[TID1, TID2] (Redis List)
+				- UID->Followers[]
+				- TID -> Tweet
+			- Home TimeLine
+				- Redis: U1->HT, U2->HT (stores hometime for each user)
+				- Fanout: Tweet -> Find followers -> Update Home Timelines of each user
+					- Breaks for celebrities as fanout will take a long time.
+					- Celebrities
+						- For each User cache alist of celebrity followings
+						- At read time, query each celebrity followings user timeline and add any new tweet found to user home timeline cache in redis
+			- Trends
+				- 1000 tweets/5 minutes > 10,000 tweets/ 1 month
+				- Volume of tweets, time taken
+			- Stream Processing - Apache storm, Kafka strems, Heron
+				- Tweet -> Filter -> Parse -> Geolocation -> Count/Location -> Rank (Volume/time) -> Redis -> API
+					- Filter - Remove common words, abusive words
+					- Parse - Extract hashtag, auto create hashtag
+					- Each part of stream processing has a queue to accumulate results from previous step
+		- Entire System Design
+			- User -> LB 
+						-> Tweets Writer -> DB, Apache Storm
+					  	-> Timeline Service -> Fanout (HT/UT) -> Redis [Managed by Zookeeper]
+											-> Search service
+						-> HTTP Push Websocket -> Timeline service
+
+- Netflix System Design
+	- https://www.youtube.com/watch?v=psQzyFfsUGU&feature=youtu.be
+	- Each media is transcoded into multiple formats and stored in a CDN
+		- Transcoding can be handled with a pool of workers, which process each file and store in s3
+		- Files are futher routed to CDN's across the world
+		- Each requests goes to Amazon Elastic load balancer for authentication, profile, catalog etc.
+		- For streaming each client will access the closest media server
+		- Each media server whill serve according to the clients needs
+	- Recommendations
+		- Collaborative filtering
+		- Content filtering
+
+- WhatsApp System Design
+	- https://www.youtube.com/watch?v=L7LtmfFYjc4
+	- Each client connects to a messagign server through a load balancer
+	- A messaging server invokes a new thread/process to respond to a client
+	- Connection is bidirectional (TCP) so thread/process can send messages to the client also
+	- When the thread/process recieves a message from A destined to B, it can do either of the following
+		- If B is connected, then hand of the message to the process of B through a queue
+		- If B is not connected, then store the message in a DB destined for B
+			- When B connects then B's process checks the DB and sends B the message
+	- Thread/process/queue corresponding to each user can be stored in a DB
+
+
+- Dropbox System Design
+	- https://www.youtube.com/watch?v=U0xTu6E2CT8
+	- Each file is broken into smaller chunks and saved in S3 so that only parts are uploaded
+	- Each client is broken down into.
+		- 1. Chunker - chunks hte files
+		- 2. Indexer - Keeps the index of all the chunks of each files in a db
+		- 3. Watcher - Watches if the file has been changed and so deservies a sync.
+		- 4. Sync - Checks if the file has been changed by someother client and downloads the updates
+	- Once a client watches a file change
+		- it chunks the file and uploads the new chunks
+		- it notifies a messaging  queue that the file has changed and identifcation of new chunks
+	- Server side sync service reads the messaging queue and updates the server side DB containing all user files and chunks
+		- sync service further notifies all clients that this file has changed
+	- Server side DB is mysql behind a elastic load balancer
+		- Can use mysql because it is easy to shard across users
+
+
+
+- Bookmyshow
+	- https://youtu.be/lBAwJgoO3Ek?t=599
+		- RDBMS for structured data like movies, users, screns, tiers, seats etc.
+		- NoSQL for comments, ratings, artists, casts, trailers 
+			- Recommendations : Apache Hive, Pig, Hadoop
+			- Trust : Spark Storm
+
+		- Load Balancer -> Varnish (Or CDN) -> Multiple App Servers -> Cache -> RDBMS/NoSQL
+			- App Servers -> ELK Stack
+			- App Servers -> Queue -> SMS/Email
+
+
+	- Integrate through an API with movie screens
+		- Reserve the ticket for a user till he is making the booking and release it incase booking fails
+
+
+
+
+
+- Eventual consistency
+- Consistent hashing
+- Stream processing - Apache storm, KAfka streams, Heron
+
+
+- Uber/Lyft Design
+	- https://www.youtube.com/watch?v=J3DY3Te3A_A
+	- Trip Storage, Customer Driver Matching, ETA calculation, Location Logging
+		- Trip storage 
+			- goes to SQL database - maybe backed up
+			- Pushed to a datawarehouse (Hadoop) for analytics
+		- Location logging
+			- Pushed to an event queue
+			- Kafka for Uber
+			- Kafka sends data to hadoop for further analytics
+		- ETA
+			- Djiksta, Travelling Salesman problem
+			- Can take the route map and find the shortest way from A to B
+			- Need to weight it by average speed on road nad real time traffic conditions
+			- Too compute intensive so can approimate by Historical data on ETA 
+			- Other option is to Partition city into zones and find differences between zones
+	- https://www.youtube.com/watch?v=umWABit-wbk
+		- Location data from Driver/Traveller -> WAF -> LB -> KAFKA -> Hadoop, Spark/Storm, Maps(ETA), ML Fraud etc.
+			- WAF
+				- Web application firewall for security, blacklisting etc.
+			- Kafka -> ELK for analytics
+			- Kafka -> NoSQL for updated postions
+			- Map is divided into cells and each request is mapped to servers containing information about specific cells
+			- Cells are stored in servers which auto-loadbalance and auto-synchronize amongst themselves using GOSSIP PROTOCOL.
+			- If the whole DC goes down then there is a backup DC. backup DC takes real time information directly from client devices (mobile phones) to update its state.
+			- Mobile -> WAF -> LB -> Web Socket -> Supply/Demand service
+				- For real time updates of taxis
+				- Supply/Demand service queries the server of the cell which the user is in.
+					- The cell server figures out all the nearby cell servers and in turn queries them for taxis around the user
+					- Sorting by ETA happens at the first cell server
+					- First cell server replies to Supply service with the sorted list.
+					- Limit communication to the Supply/Demand server as teh cell servers can be autoscaled on demand.
+
+
+
+
+
+- Parking Lot system design
+	- https://www.youtube.com/watch?v=DSGsa0pu8-k&t=155s
+
+
+- Redis System Design - Distributed cache
+	- https://www.youtube.com/watch?v=DUbEgNw-F9c
+
+	- Can have a hashmap which maps to a linked list
+	- LRU Cache
+		- make the link list a doubly linked list and separately maintain End and Start of list
+		- On every access of the cache, remove the note from the linked list and place it at the top of the linked list
+		- The nodes from the end of the linked list can be removed to maintain LRU cache
+	- Cache reconstruction if RAM fails
+		- Keep a log and replay log
+	- Availability
+		- Keep a slave copy of each box and can route to slave incase a box fails
+
+	- Control flow
+		- get/put -> event queue -> event loop -> threads pool -> update RAM
+
+
+
+- Rate limiting system design
+		- https://www.youtube.com/watch?v=mhUQe4BKZXs
+		- eg. 5 reqs/min
+			- Token bucket
+				- Keep the start time stamp and keep a reducing token. Deny if token hits zero. Reset if time elapses.
+			- Leaky Bucket - FIFO
+				- fixed sized buckets. Requests pile up in the bucket and are rejected on overflow
+
+			- Fixed Window Counter
+				- Reset the counter each minute and allow only 5 countdowns
+				- Problem is that requests might overflow at time boundaries
+			- Sliding logs
+				- Store timestamps of each requests served and on every request lookback if rate has exceeded.
+				- Can optimise this by storing count of multiple requests in the same timestamp if they occored concurrently
+			- Distributed Setup
+				- Have to store rate in a single box - maybe redis
+					- Will have to lock the box while lookup
+				- Other option is to allow a loose policy
+				- Can isolate a single service requests to a single box
+				- Can store locally and sync across boxes
+
+
+
+
+- Auto complete 
+	- https://www.youtube.com/watch?v=xrYTjaK5QVM&t=868s
+	- https://www.youtube.com/watch?v=us0qySiUsGU
+	- Distributed Trie data structure
+		- Can cache the results in Trie - every node stores the top 10 leafs expressions so dont have to traverse the trie for each key press
+	- Can cache the results from Trie in a prefix->suggestions hash map
+	- Results can be cached into the memcached or redis
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
