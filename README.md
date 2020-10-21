@@ -18,3 +18,9 @@
 * https://eng.uber.com/cherami/
 * https://eng.uber.com/chaperone/   
 
+### Redis/Caching
+
+A lot of interview questions require use of cache & Redis has become favorite of most interviewers, primarily because Redis can serve as cache, DB (AOF) & queue (through ordered list & set). 
+
+* [Redis best practices](https://redislabs.com/redis-best-practices/introduction/)
+
